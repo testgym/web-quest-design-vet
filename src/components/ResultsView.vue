@@ -33,9 +33,16 @@ const answers = computed<QuizAnswer[]>(() => Array.isArray(props.result?.answers
 const score = computed(() => Math.max(0, Math.min(100, Number(props.result?.score) || 0)))
 const correctCount = computed(() => Number(props.result?.correctCount) || 0)
 const total = computed(() => Number(props.result?.total) || questions.value.length)
-const missed = computed(() => questions.value
-  .map((question, index) => ({ question, answer: answers.value.find(answer => answer.questionId === question.id), index }))
-  .filter(item => item.answer && !item.answer.isCorrect))
+const missed = computed(() => answers.value
+  .map((answer, index) => ({ question: questions.value.find(question => question.id === answer.questionId), answer, index }))
+  .filter((item): item is { question: Question; answer: QuizAnswer; index: number } => Boolean(item.question && !item.answer.isCorrect)))
+const assessmentNote = computed(() => props.result?.questMode === 'mastery' && answers.value.length > total.value
+  ? 'Підсумковий бал обчислено за новими завданнями після корекції. Помилки першої перевірки також є нижче.'
+  : props.result?.questMode === 'adaptive'
+    ? 'Маршрут змінював складність після кожного рішення. Бал обчислено за отриманими завданнями.'
+    : props.result?.questMode === 'zpd'
+      ? 'Підказки й повторні спроби допомагали під час квесту; перегляньте їх разом із результатом.'
+      : 'Бал обчислено за виконаними завданнями цього маршруту.')
 
 const skillNames: Record<Question['skill'], string> = {
   recognition: 'Розпізнавання',
@@ -50,10 +57,15 @@ const typeNames: Record<Question['type'], string> = {
 }
 
 const mastery = computed(() => {
-  if (score.value >= 85) return { label: 'Впевнене володіння', description: 'Ви добре застосовуєте методику навіть у складних педагогічних ситуаціях.', tone: 'excellent' }
-  if (score.value >= 70) return { label: 'Сформована основа', description: 'Ключові принципи засвоєні. Перегляньте пояснення до помилок, щоб закріпити деталі.', tone: 'good' }
-  if (score.value >= 50) return { label: 'На шляху до засвоєння', description: 'Ви розумієте основи. Повторіть приклади застосування та спробуйте ще раз.', tone: 'developing' }
-  return { label: 'Потрібне повторення', description: 'Поверніться до матеріалу й уважно розберіть практичні приклади.', tone: 'review' }
+  if (props.result?.questMode === 'mastery') {
+    return score.value === 100
+      ? { label: 'Мету опановано', description: 'У підсумковій перевірці всі рішення безпечні. Можна переходити до складніших випадків.', tone: 'excellent' }
+      : { label: 'Потрібна ще одна спроба', description: 'Перегляньте пояснення до помилок і пройдіть маршрут знову для повного опанування.', tone: 'review' }
+  }
+  if (score.value >= 85) return { label: 'Впевнене рішення', description: 'Ви добре розпізнаєте ризики фішингу та обираєте безпечні дії.', tone: 'excellent' }
+  if (score.value >= 70) return { label: 'Сформована основа', description: 'Більшість рішень безпечні. Перегляньте пояснення до помилок.', tone: 'good' }
+  if (score.value >= 50) return { label: 'Потрібна практика', description: 'Повторіть складні ситуації та спробуйте маршрут ще раз.', tone: 'developing' }
+  return { label: 'Потрібне повторення', description: 'Прочитайте пояснення до рішень і поверніться до квесту.', tone: 'review' }
 })
 
 function formatTime(seconds: number) {
@@ -102,13 +114,13 @@ function formatAnswer(q: Question, value: AnswerValue): string {
   <section class="results-shell" :style="{ '--method-accent': method.accent || '#8b7aff' }">
     <div class="results-topline">
       <button type="button" class="text-button" @click="emit('home')"><span aria-hidden="true">←</span> До каталогу</button>
-      <span class="results-module">РЕЗУЛЬТАТ ПРАКТИКУМУ <span class="module-dot"></span> {{ method.shortTitle || method.title }}</span>
+      <span class="results-module">РЕЗУЛЬТАТ ВЕБКВЕСТУ <span class="module-dot"></span> {{ method.shortTitle || method.title }}</span>
     </div>
 
     <header class="results-heading">
       <span class="eyebrow"><span class="pulse-dot"></span> ПІДСУМКИ НАВЧАННЯ</span>
       <h1>Ваш результат <span>готовий.</span></h1>
-      <p>Перегляньте сильні сторони й завдання, які варто повторити.</p>
+      <p>{{ method.quest.topic }} · {{ assessmentNote }}</p>
     </header>
 
     <div class="result-hero">
@@ -117,11 +129,11 @@ function formatAnswer(q: Question, value: AnswerValue): string {
       </div>
       <div class="hero-copy">
         <span class="mastery-badge" :class="mastery.tone"><span aria-hidden="true">✦</span> {{ mastery.label }}</span>
-        <h2>{{ score >= 70 ? 'Чудова робота з методикою.' : 'Кожна спроба наближає до розуміння.' }}</h2>
+        <h2>{{ score >= 70 ? 'Ви просунулися в захисті акаунта.' : 'Продовжуйте тренувати безпечні рішення.' }}</h2>
         <p>{{ mastery.description }}</p>
         <div class="hero-actions">
           <button class="primary-button" type="button" @click="emit('retry')">Спробувати ще раз <span aria-hidden="true">↗</span></button>
-          <button class="secondary-button" type="button" @click="emit('back')">Повернутися до теорії</button>
+          <button class="secondary-button" type="button" @click="emit('back')">Переглянути маршрут</button>
         </div>
       </div>
       <div class="hero-glow" aria-hidden="true"></div>
@@ -165,10 +177,10 @@ function formatAnswer(q: Question, value: AnswerValue): string {
           </div>
         </details>
       </div>
-      <p v-else class="perfect-note">Ви правильно розв’язали всі педагогічні ситуації. Можете повернутися до каталогу й дослідити наступну методику.</p>
+      <p v-else class="perfect-note">Усі отримані завдання розв’язано правильно. Можете обрати інший маршрут цієї теми.</p>
     </section>
 
-    <div class="bottom-actions"><button type="button" class="secondary-button" @click="emit('home')">← До каталогу методик</button><button type="button" class="primary-button" @click="emit('retry')">Повторити тест <span aria-hidden="true">↗</span></button></div>
+    <div class="bottom-actions"><button type="button" class="secondary-button" @click="emit('home')">← До каталогу методик</button><button type="button" class="primary-button" @click="emit('retry')">Повторити вебквест <span aria-hidden="true">↗</span></button></div>
   </section>
 </template>
 

@@ -1,11 +1,16 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { Method } from '../data/methods'
 import UiIcon from './UiIcon.vue'
 
-const props = defineProps<{ method: any; index: number; progress?: { visited: boolean; bestScore: number | null; attempts: number } }>()
+const props = defineProps<{ method: Method; index: number; progress?: { visited: boolean; bestScore: number | null; attempts: number } }>()
 const emit = defineEmits<{ open: []; quiz: [] }>()
-const percent = computed(() => props.progress?.bestScore ?? (props.progress?.visited ? 15 : 0))
-const stageCount = computed(() => props.method.stages.length)
+const percent = computed(() => props.progress?.bestScore ?? 0)
+const stageCount = computed(() => props.method.quest.mode === 'adaptive' ? Math.min(6, props.method.quiz.length)
+  : props.method.quest.mode === 'zpd' ? props.method.quiz.length : props.method.quest.stages.length)
+const stageLabel = computed(() => ({
+  bloom: 'рівнів', mastery: 'раунди', zpd: 'кейсів', solo: 'рівнів', gagne: 'подій', adaptive: 'рішень',
+})[props.method.quest.mode] ?? 'етапів')
 </script>
 
 <template>
@@ -14,10 +19,10 @@ const stageCount = computed(() => props.method.stages.length)
       <div class="visual-grid"></div><div class="visual-ring visual-ring--one"></div><div class="visual-ring visual-ring--two"></div><div class="visual-ring visual-ring--three"></div>
       <div class="visual-core"><span>{{ String(index + 1).padStart(2, '0') }}</span><UiIcon name="sparkle" :size="26" /></div>
       <div class="visual-nodes"><i v-for="stage in Math.min(stageCount, 9)" :key="stage" :style="{ '--i': stage - 1, '--n': Math.min(stageCount, 9) }"></i></div>
-      <span class="visual-label">{{ stageCount }} {{ stageCount === 5 ? 'рівнів' : stageCount === 6 ? 'рівнів' : 'етапів' }}</span>
+      <span class="visual-label">{{ stageCount }} {{ stageLabel }}</span>
       <span class="visual-corner"><UiIcon name="arrow" :size="16" /></span>
     </button>
-    <div class="card-body"><div class="card-tags"><span class="category-tag"><span></span>{{ method.category }}</span><span class="difficulty-tag">{{ method.difficulty }}</span></div><h3>{{ method.title }}</h3><p class="card-author">{{ method.author }}</p><p class="card-summary">{{ method.summary }}</p><div class="card-divider"></div><div class="card-progress-line"><span>Ваш прогрес</span><strong>{{ percent }}%</strong></div><div class="card-progress-track"><span :style="{ width: `${percent}%` }"></span></div><div class="card-actions"><button class="card-open" type="button" @click="emit('open')">Вивчити методику <UiIcon name="arrow" :size="17" /></button><button v-if="progress?.visited" class="card-quiz" type="button" :aria-label="`Пройти тест: ${method.title}`" title="Пройти тест" @click="emit('quiz')"><UiIcon name="play" :size="16" /></button></div></div>
+    <div class="card-body"><div class="card-tags"><span class="category-tag"><span></span>{{ method.category }}</span><span class="difficulty-tag">{{ method.difficulty }}</span></div><h3>{{ method.title }}</h3><p class="card-author">Тема: {{ method.quest.topic }}</p><p class="card-summary">{{ method.quest.strategy }}</p><div class="card-divider"></div><div class="card-progress-line"><span>{{ progress?.attempts ? 'Найкращий результат' : progress?.visited ? 'Маршрут відкрито' : 'Ще не розпочато' }}</span><strong>{{ percent }}%</strong></div><div class="card-progress-track"><span :style="{ width: `${percent}%` }"></span></div><div class="card-actions"><button class="card-open" type="button" @click="emit('open')">Переглянути маршрут <UiIcon name="arrow" :size="17" /></button><button v-if="progress?.visited" class="card-quiz" type="button" :aria-label="`Почати вебквест: ${method.title}`" title="Почати вебквест" @click="emit('quiz')"><UiIcon name="play" :size="16" /></button></div></div>
   </article>
 </template>
 
